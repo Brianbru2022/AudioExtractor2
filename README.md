@@ -1,168 +1,165 @@
 # Audio Extractor 2
 
-Windows desktop meeting-ingest and transcript-review app built with Tauri, React, FastAPI, SQLite, FFmpeg, and Google Cloud Speech-to-Text.
+[![Windows Desktop Build](https://github.com/Brianbru2022/AudioExtractor2/actions/workflows/windows-release.yml/badge.svg)](https://github.com/Brianbru2022/AudioExtractor2/actions/workflows/windows-release.yml)
 
-## What is complete in the current phase
+Audio Extractor 2 is a Windows-first desktop application for long-form meeting ingestion, chunk-aware transcription prep, Google Cloud Speech-to-Text transcription, evidence-backed Gemini extraction, human review, and business-ready export.
 
-- Tauri + React desktop shell with dense dark review UI
-- FastAPI local worker with background preprocessing and transcription jobs
-- SQLite persistence with migration bootstrap
-- Import flow with `reference` and `managed_copy` modes
-- FFmpeg-based normalization to mono 16 kHz FLAC
-- Silence-aware chunk planning and real chunk file generation with checksums
-- Google Cloud Speech-to-Text V2 chunk transcription pipeline
-- Raw per-chunk transcript persistence plus merged transcript stitching
-- Transcript review UI with speaker labels, timestamps, confidence flags, artifacts, and job tracking
-- Gemini-backed evidence extraction from persisted merged transcripts
-- Reviewable insights UI for summaries, minutes, actions, decisions, risks, and questions
-- Export pipeline for DOCX, PDF, CSV, XLSX, JSON, and TXT delivery outputs
+![Audio Extractor 2 overview](app/src/assets/hero.png)
 
-## What is not included yet
+## What it does
 
-- Live recording or microphone streaming
-- Speaker reconciliation across chunks
-- Cloud sync
-- Multi-user auth
+- Imports local meeting audio and video files
+- Preserves the original file while creating normalized working audio
+- Plans long-form chunks using silence-aware boundaries and overlap
+- Transcribes prepared chunks with Google Cloud Speech-to-Text V2
+- Stitches chunk transcripts into a merged, reviewable meeting transcript
+- Extracts evidence-backed minutes, decisions, risks, questions, and actions with Gemini
+- Supports reviewer approval and export to DOCX, PDF, CSV, XLSX, JSON, and TXT
 
-## Folder layout
+## Architecture
 
-- [app](/D:/new-apps/WORK/2026/Audio%20Extractor%202/app): Tauri desktop shell, React UI, TypeScript frontend
-- [worker](/D:/new-apps/WORK/2026/Audio%20Extractor%202/worker): FastAPI worker, SQLite access, preprocessing and transcription services
-- [shared](/D:/new-apps/WORK/2026/Audio%20Extractor%202/shared): shared TypeScript API contracts
-- [storage](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage): runtime database, artifacts, normalized audio, chunks, logs
-- [docs](/D:/new-apps/WORK/2026/Audio%20Extractor%202/docs): architecture notes and validation docs
+| Area | Stack | Purpose |
+| --- | --- | --- |
+| Desktop app | Tauri + React + TypeScript + Vite + Tailwind | Windows shell and review UI |
+| Local worker | FastAPI + Python 3 | Ingest, preprocessing, chunking, transcription, extraction, export |
+| Storage | SQLite + local filesystem | Persistent metadata, runs, artifacts, transcripts, exports |
+| Media tooling | FFmpeg + FFprobe | Probe, normalize, silence analysis, chunk writing |
+| STT | Google Cloud Speech-to-Text V2 | Chunk transcription |
+| Extraction | Gemini structured outputs | Evidence-backed downstream meeting extraction |
 
-## How to run the worker
+## Current workflow
 
-1. Install Python dependencies:
+The UI is organized around a business workflow rather than pipeline internals:
+
+1. Import
+2. Preparation
+3. Transcription
+4. Speaker Tagging
+5. Minutes & Tasks
+6. Export
+7. History
+8. Settings
+
+## Repository layout
+
+- `app/` - Tauri desktop shell and React frontend
+- `worker/` - FastAPI worker, repositories, services, and tests
+- `shared/` - shared TypeScript API contracts
+- `docs/` - architecture notes and validation reports
+- `storage/` - local runtime data only, intentionally gitignored
+
+## Local development
+
+### Prerequisites
+
+- Windows 10 or 11
+- Node.js 20+
+- Python 3.11+
+- Rust stable toolchain
+- FFmpeg and FFprobe on `PATH`
+- Tauri Windows prerequisites, including WebView2
+
+### Run the worker
 
 ```powershell
-cd "D:\new-apps\WORK\2026\Audio Extractor 2\worker"
+cd worker
 python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8765 --reload
 ```
 
-2. Start the worker:
+### Run the desktop app
 
 ```powershell
-cd "D:\new-apps\WORK\2026\Audio Extractor 2\worker"
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8765 --reload
+cd app
+npm install
+npm run tauri:dev
 ```
 
 The worker listens on `http://127.0.0.1:8765`.
 
-## How to run the desktop app
+## Cloud configuration
 
-1. Install frontend dependencies:
+### Google Cloud Speech-to-Text
 
-```powershell
-cd "D:\new-apps\WORK\2026\Audio Extractor 2\app"
-npm install
-```
-
-2. Run the web UI during development:
-
-```powershell
-cd "D:\new-apps\WORK\2026\Audio Extractor 2\app"
-npm run dev
-```
-
-3. Run the desktop shell with Tauri:
-
-```powershell
-cd "D:\new-apps\WORK\2026\Audio Extractor 2\app"
-npm run tauri:dev
-```
-
-## FFmpeg expectations
-
-- `ffmpeg` must be available on `PATH`
-- `ffprobe` must be available on `PATH`
-- The worker uses FFmpeg for probe refresh, normalization, silence analysis, waveform summary generation, and chunk writing
-
-## Gemini API foundation
-
-The worker includes a dedicated Gemini REST client used internally for structured extraction work.
-
-- Settings key: `gemini_defaults`
-- Auth modes:
-  - `api_key_env`
-  - `api_key_file`
-
-Important:
-
-- Do not hardcode Gemini API keys in the repo or SQLite
-- Prefer `GEMINI_API_KEY` in the environment
-- The current Gemini 3 text model names are preview ids such as `gemini-3-flash-preview` and `gemini-3.1-pro-preview`
-- The default extraction model is `gemini-3.1-pro-preview`
-- There is not a literal `gemini-3.0` API model id
-
-## Google Cloud setup
-
-The transcription worker is local-first, but Google Speech-to-Text V2 chunk transcription needs Google credentials and a staging bucket.
-
-Configure these in `app_settings.transcription_defaults` through the worker settings API or directly in the DB:
+Configure the worker with:
 
 - `project_id`
 - `auth_mode`
-- `credentials_path` if you are not using Application Default Credentials
+- `credentials_path` when using file-based credentials
 - `recognizer_location`
-- `recognizer_id` or `_`
+- `recognizer_id`
 - `staging_bucket`
 - `staging_prefix`
 - `model`
 - `language_code`
-- diarization, punctuation, confidence, and parallelism defaults
 
-Credential handling rules:
+Recommended defaults:
 
-- Prefer Application Default Credentials
-- Or set `auth_mode` to `credentials_file` and point `credentials_path` at a local service-account file
-- Do not store raw credential JSON in SQLite
+- model: `chirp_3`
+- language: `en-US`
+- recognizer location: region aligned with your bucket and recognizer setup
 
-## Where files are stored
+### Gemini extraction
 
-- Database: [storage/db](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/db)
-- Managed copies: [storage/managed](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/managed)
-- Normalized audio: [storage/normalized](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/normalized)
-- Chunk files: [storage/chunks](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/chunks)
-- JSON and transcript artifacts: [storage/artifacts](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/artifacts)
-- Export outputs: [storage/exports](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/exports)
-- Logs: [storage/logs](/D:/new-apps/WORK/2026/Audio%20Extractor%202/storage/logs)
+Gemini is used only for downstream structured extraction, not transcription.
 
-Original media is never modified. In `reference` mode the worker reads the original file in place. In `managed_copy` mode it duplicates the original into local storage before preprocessing.
+- preferred auth: environment variable `GEMINI_API_KEY`
+- supported auth modes: environment-based or file-based
+- default extraction model: `gemini-3.1-pro-preview`
+- faster fallback: `gemini-3-flash-preview`
+
+Do not commit credential files, API keys, or local settings JSON.
+
+## GitHub Actions packaging
+
+This repository includes a Windows GitHub Actions workflow in [`.github/workflows/windows-release.yml`](.github/workflows/windows-release.yml).
+
+What it does:
+
+- builds the Tauri desktop shell on `windows-latest`
+- uploads workflow artifacts on manual runs
+- creates a GitHub release with Windows bundles when you push a tag like `v0.1.0`
+
+Important:
+
+- the workflow packages the desktop app shell
+- the FastAPI worker is still operated separately in the current architecture
+- if you later want a single-click shipped installer with the worker bundled, that should be handled as a packaging phase rather than by committing runtime data
 
 ## Validation
 
-- `npm run build`
-- `python -m unittest discover -s tests`
-- `python -m compileall worker/app`
+Frontend:
 
-## Export formats
+```powershell
+cd app
+npm run build
+```
 
-Meeting Detail now supports these exports from persisted reviewed data:
+Worker:
 
-- Formal Minutes Pack
-  - `DOCX`
-  - `PDF`
-- Action Register
-  - `CSV`
-  - `XLSX`
-- Full Archive
-  - `JSON`
-- Merged Transcript
-  - `TXT`
+```powershell
+cd worker
+python -m unittest discover -s tests
+python -m compileall app
+```
 
-Export options include:
+## Documentation
 
-- reviewed only vs all extracted items
-- evidence appendix on/off
-- transcript appendix on/off
-- confidence flags on/off
+- [Architecture](docs/architecture.md)
+- [Transcription Phase](docs/transcription-phase.md)
+- [Extraction Phase](docs/extraction-phase.md)
+- [Export Phase](docs/export-phase.md)
+- [Phase 1 Validation](docs/phase1-validation.md)
+- [Phase 3 Validation](docs/phase3-validation.md)
+- [Phase 3 Live Validation](docs/phase3-live-validation.md)
+- [Phase 3 STT Live Validation](docs/phase3-stt-live-validation.md)
 
-## What should come next
+## Known limitations
 
-1. Add speaker rename and cross-chunk speaker reconciliation.
-2. Add transcript navigation tied to waveform and chunk boundaries.
-3. Add explicit review/approval state for summary and minutes.
-4. Add retry and cancel controls for more background job types where useful.
-5. Add packaging and delivery workflows on top of the export layer.
+- Worker and desktop shell are still deployed as separate processes
+- Speaker identity is preserved per transcript evidence but not fully reconciled across chunks
+- Live recording, cloud sync, multi-user support, and generic assistant behavior are intentionally out of scope
+
+## License
+
+This repository is currently licensed under the MIT License. See [LICENSE](LICENSE).
